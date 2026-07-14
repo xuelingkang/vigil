@@ -137,6 +137,8 @@ def _send_notification(
             cmd += ["-group", group]
         if sound:
             cmd += ["-sound", sound]
+        # 点击通知关闭（无跳转）
+        cmd += ["-execute", "true"]
 
         try:
             result = subprocess.run(cmd, timeout=5, capture_output=True)
