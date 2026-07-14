@@ -73,7 +73,7 @@ vigil: registered
 |------|------|--------|------|
 | `enabled` | boolean | `true` | 是否启用插件。设为 `false` 时跳过注册，不加载 hook |
 | `title_prefix` | string | `"vigil"` | 通知标题前缀。设为空字符串 `""` 或 `null` 时无前缀，title 直接是 `session:window.pane` 或 `Hermes` |
-| `sound` | string | `"Glass"` | macOS 通知声音名称。空字符串或 `null` 表示静音 |
+| `sound` | string | `"default"` | macOS 通知声音。`"default"` 使用系统提示音（推荐），也可用 Basso/Blow/Bottle/Frog/Funk/Glass/Hero/Morse/Ping/Pop/Purr/Sosumi/Submarine/Tink。空字符串或 `null` 表示静音 |
 | `body_length` | integer | `80` | 通知正文截取的最大字符数。设为 `0` 时正文为 `"…"` |
 
 常用声音：`Basso`, `Blow`, `Bottle`, `Frog`, `Funk`, `Glass`, `Hero`, `Morse`, `Ping`, `Pop`, `Purr`, `Sosumi`, `Submarine`, `Tink`

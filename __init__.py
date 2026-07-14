@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 DEFAULTS = {
     "enabled": True,
     "title_prefix": "vigil",
-    "sound": "Glass",
+    "sound": "default",
     "body_length": 80,
 }
 
