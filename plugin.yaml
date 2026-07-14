@@ -1,0 +1,7 @@
+name: vigil
+version: 1.0.0
+description: "macOS system notification when Hermes finishes a response. Shows tmux session:window.pane in title. Notifications grouped by pane. Requires terminal-notifier (brew install terminal-notifier)."
+author: vigil
+requires_env: []
+hooks:
+  - post_llm_call

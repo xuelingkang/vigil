@@ -1,0 +1,14 @@
+Vigil — Hermes post_llm_call Notification Plugin
+===============================================
+
+This plugin is derived from [hermes-notification](https://github.com/itgoyo/hermes-notification),
+originally licensed under the MIT License.
+
+Original Copyright (c) itgoyo
+
+Changes from the upstream version:
+- Removed min_response_length filtering
+- Removed web-ui auto-detection and click-to-jump
+- Removed configurable terminal_name
+- Title prefix is configurable (title_prefix), default "vigil"
+- Added tmux awareness: session:window.pane in title, notifications grouped by pane
