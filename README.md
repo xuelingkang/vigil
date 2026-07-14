@@ -64,7 +64,7 @@ vigil: registered
 {
     "enabled": true,
     "title_prefix": "vigil",
-    "sound": "Glass",
+    "sound": "default",
     "body_length": 80
 }
 ```
@@ -73,10 +73,8 @@ vigil: registered
 |------|------|--------|------|
 | `enabled` | boolean | `true` | 是否启用插件。设为 `false` 时跳过注册，不加载 hook |
 | `title_prefix` | string | `"vigil"` | 通知标题前缀。设为空字符串 `""` 或 `null` 时无前缀，title 直接是 `session:window.pane` 或 `Hermes` |
-| `sound` | string | `"default"` | macOS 通知声音。`"default"` 使用系统提示音（推荐），也可用 Basso/Blow/Bottle/Frog/Funk/Glass/Hero/Morse/Ping/Pop/Purr/Sosumi/Submarine/Tink。空字符串或 `null` 表示静音 |
+| `sound` | string | `"default"` | macOS 通知声音。推荐 `"default"`（系统提示音）。如需其他声音，从 系统设置 → 声音 → 提示音 中查看名称，填入即可。空字符串或 `null` 表示静音 |
 | `body_length` | integer | `80` | 通知正文截取的最大字符数。设为 `0` 时正文为 `"…"` |
-
-常用声音：`Basso`, `Blow`, `Bottle`, `Frog`, `Funk`, `Glass`, `Hero`, `Morse`, `Ping`, `Pop`, `Purr`, `Sosumi`, `Submarine`, `Tink`
 
 ## 使用说明
 
@@ -90,7 +88,7 @@ vigil: registered
 ## 注意事项
 
 - **macOS only**：依赖 `terminal-notifier` 或 `osascript`，仅支持 macOS
-- **无点击行为**：通知为纯信息展示，点击通知不会触发任何操作
+- **点击关闭通知**：点击通知正文即可关闭，无跳转行为
 - **tmux 依赖**：tmux 位置标识功能需要 `tmux` 命令可用且进程在 tmux 环境中运行
 - **分组依赖**：通知按 pane 分组需 `terminal-notifier` 支持；降级为 `osascript` 时所有通知独立显示
 - **日志前缀**：所有插件日志以 `vigil:` 前缀输出，可在 Hermes 日志中查看
