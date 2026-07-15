@@ -18,17 +18,17 @@
 
 ### 1.2 解决方案
 
-在 Hermes 每次完成 LLM 回复后（`post_llm_call` hook），通过 macOS 原生通知系统告知用户。通知标题根据运行环境动态生成：
+在 Hermes 每次完成 LLM 回复后（`post_llm_call` hook），通过 macOS 原生通知系统告知用户。通知标题固定为配置项 `title`（默认 "Vigil"），副标题根据运行环境动态生成：
 
-- **tmux 内**：显示 `session:window.pane`（如 `work:1.0`），精确标识 Hermes 所在位置
-- **tmux 外**：显示 `Hermes`，简洁通用
+- **tmux 内**：副标题显示 `session:window.pane`（如 `work:1.0`），精确标识 Hermes 所在位置
+- **tmux 外**：副标题显示 `Hermes`，简洁通用
 
 通知按 `session:window.pane` 分组（group），多个 pane 的通知互不影响、独立显示。
 
 ### 1.3 设计原则
 
 - **最小依赖**：优先 `terminal-notifier`（需安装），缺失时降级为 `osascript`
-- **无点击行为**：通知为纯信息展示，不绑定 `-execute` 动作
+- **点击清理**：点击通知移除当前 group 的通知，关闭并清理通知中心
 - **按 pane 分组**：每个 tmux pane 独立 group，不同 pane 通知互不替换
 - **非阻塞**：通知发送在后台线程执行
 - **零侵入**：纯插件，不修改 Hermes 核心代码
@@ -49,10 +49,13 @@ post_llm_call hook 触发 (_on_post_llm_call)
 加载配置 (~/.hermes/plugins/vigil/config.json)
         │
         ▼
-构建通知标题 + group key
-  ├── tmux 内 → tmux display-message -p #S:#W.#P → "session:window.pane"
+读取 config.title → 通知标题（如 "Vigil"）
+        │
+        ▼
+获取副标题 + group key
+  ├── tmux 内 → tmux display-message -p #S:#W.#P → subtitle = "session:window.pane"
   │              group = "vigil:session:window:pane"（连字符避免粘连）
-  └── tmux 外 → title = "Hermes", 不设置 group
+  └── tmux 外 → subtitle = "Hermes", 不设置 group
         │
         │
         ▼
@@ -60,15 +63,15 @@ post_llm_call hook 触发 (_on_post_llm_call)
         │
         ▼
 后台线程发送通知
-  ├── terminal-notifier（主路径，带 -group）
-  └── osascript display notification（降级路径，无 group 支持）
+  ├── terminal-notifier（主路径，带 -subtitle, -group, -execute "{tn} -remove {group}" 清理）
+  └── osascript display notification（降级路径，无 subtitle/group 支持）
 ```
 
-### 2.2 通知标题与分组
+### 2.2 通知副标题与分组
 
 ```python
 def _get_title_and_group() -> tuple[str, str | None]:
-    """返回 (title, group)。title 显示在通知上，group 用于通知替换/分组。tmux 外返回 group=None。"""
+    """返回 (subtitle, group)。subtitle 显示在通知副标题上，group 用于通知替换/分组。tmux 外返回 group=None。"""
     if os.environ.get("TMUX"):
         try:
             result = subprocess.run(
@@ -88,14 +91,13 @@ def _get_title_and_group() -> tuple[str, str | None]:
 
 **分组规则**：
 
-| 环境 | title | group | 完整标题显示 |
-|------|-------|-------|-------------|
-| tmux session `work` window `1` pane `0` | `work:1.0` | `vigil:work-1-0` | `vigil:work:1.0` |
-| tmux 内（tmux 命令失败/无输出） | `tmux` | 无 group | `vigil:tmux` |
-| tmux 外 | `Hermes` | 无 group（每次新通知独立显示） | `vigil:Hermes` |
+| 环境 | subtitle | group | 通知显示效果 |
+|------|----------|-------|-------------|
+| tmux session `work` window `1` pane `0` | `work:1.0` | `vigil:work-1-0` | 标题: `Vigil` / 副标题: `work:1.0` |
+| tmux 内（tmux 命令失败/无输出） | `tmux` | 无 group | 标题: `Vigil` / 副标题: `tmux` |
+| tmux 外 | `Hermes` | 无 group（每次新通知独立显示） | 标题: `Vigil` / 副标题: `Hermes` |
 
-注：hook 内部会在 title 前拼接 `vigil:` 前缀作为最终显示标题（`_on_post_llm_call` 中：`full_title = f"vigil:{title}"`），标识通知来源。
-
+- 标题固定取配置项 `title`（默认 "Vigil"），标识通知来源插件
 - `:` 和 `.` 替换为 `-` 避免 terminal-notifier group 解析歧义
 - 同一 pane 内新通知替换旧通知（同一个 group），不同 pane 独立显示
 - tmux 外不设置 group，每条通知独立显示、不替换
@@ -103,37 +105,42 @@ def _get_title_and_group() -> tuple[str, str | None]:
 ### 2.3 通知发送流程
 
 ```python
-def _send_notification(title, message, sound, group):
+def _send_notification(title, subtitle, message, sound, group):
     tn = _tn_path()
     if tn:
         cmd = [
             tn,
             "-title",   title,
+            "-subtitle", subtitle,
             "-message", message,
         ]
         if group:
             cmd += ["-group", group]
+            cmd += ["-execute", f"{tn} -remove {group}"]
         if sound:
             cmd += ["-sound", sound]
         subprocess.run(cmd, timeout=5, capture_output=True)
         return
-    # 降级：osascript (无 group，无点击)
+    # 降级：osascript (无 subtitle, group, click)
     _send_osascript_notification(title, message, sound)
 ```
 
+- 标题固定取配置值（默认 "Vigil"），副标题为 tmux 标识或 "Hermes"
 - tmux 内：`-group vigil:session-window-pane`，同一 pane 通知替换旧通知
-- tmux 外：不传 `-group`，每条通知独立显示
+- tmux 内：`-execute "terminal-notifier -remove <group>"`，点击通知移除该 group 清理通知中心
+- tmux 外：不传 `-group` 和 `-execute`，每条通知独立显示
 
 ### 2.5 消息正文截取
 
-移除原版 `min_response_length` 过滤，`_on_post_llm_call` 内拼接 `vigil:` 标题前缀后发送。
+移除原版 `min_response_length` 过滤，通知标题取自配置项 `title`，副标题由 `_get_title_and_group()` 动态生成。
 
 > **注意**：Hermes 源码 `agent/turn_finalizer.py:390` 中 `post_llm_call` hook 的触发条件是 `if final_response and not interrupted:`，即 `final_response` 为空字符串时 hook 不会触发。因此 Vigil 只能对有实际内容的回复发送通知——这是 Hermes 框架的限制，非插件责任。
 
 ```python
 def _on_post_llm_call(...):
     ...
-    full_title = f"vigil:{title}"   # 标识通知来源
+    subtitle, group = _get_title_and_group()
+    config_title = cfg.get("title", DEFAULTS["title"])
 
     # 截取通知正文
     body = assistant_response.strip()
@@ -144,17 +151,18 @@ def _on_post_llm_call(...):
     if len(assistant_response.strip()) > body_length:
         body += "…"
 
-    _notify_async(full_title, body, sound, group)
+    _notify_async(config_title, subtitle, body, sound, group)
 ```
 
-另外注意 `body_length = 0` 的特殊情况：`body[:0]` 得到空字符串 `""`，但之后判断成立会追加 `"…"`。
+标题固定取配置项 `title`，副标题动态标识运行位置。
 
 ### 2.6 配置加载
 
 ```python
 DEFAULTS = {
     "enabled": True,
-    "sound": "Glass",
+    "title": "Vigil",
+    "sound": "default",
     "body_length": 80,
 }
 ```
@@ -172,7 +180,8 @@ DEFAULTS = {
 ```json
 {
     "enabled": true,
-    "sound": "Glass",
+    "title": "Vigil",
+    "sound": "default",
     "body_length": 80
 }
 ```
@@ -182,7 +191,8 @@ DEFAULTS = {
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `enabled` | boolean | `true` | 是否启用插件。`false` 时跳过注册，不加载 hook |
-| `sound` | string | `"Glass"` | macOS 通知声音名称。空字符串或 null 表示静音。可用值：Basso, Blow, Bottle, Frog, Funk, Glass, Hero, Morse, Ping, Pop, Purr, Sosumi, Submarine, Tink |
+| `title` | string | `"Vigil"` | 通知标题。标识通知来源插件 |
+| `sound` | string | `"default"` | macOS 通知声音名称。空字符串或 null 表示静音。推荐 `"default"`（系统提示音） |
 | `body_length` | integer | `80` | 通知正文截取的最大字符数。设为 0 时正文为 `"…"` |
 
 ---
@@ -242,7 +252,7 @@ def register(ctx) -> None:
 
 ### 5.4 `_get_title_and_group()` — 标题与分组生成
 
-tmux `display-message -p #S:#W.#P` → 解析 stdout → 返回 `(title, group)` 元组。tmux 外返回 `("Hermes", None)`，不设置 group。
+tmux `display-message -p #S:#W.#P` → 解析 stdout → 返回 `(subtitle, group)` 元组。tmux 外返回 `("Hermes", None)`，不设置 group。
 
 ---
 
@@ -250,8 +260,8 @@ tmux `display-message -p #S:#W.#P` → 解析 stdout → 返回 `(title, group)`
 
 | 场景 | 行为 | 说明 |
 |------|------|------|
-| tmux 未安装或不在 tmux 内 | 标题显示 `"vigil:Hermes"`, 不设置 group | `TMUX` 环境变量不存在时直接返回 `"Hermes"` |
-| TMUX 变量存在但 tmux 命令失败 | 标题显示 `"vigil:tmux"`, 不设置 group | 兜底分支，保留 tmux 提示 |
+| tmux 未安装或不在 tmux 内 | 标题取配置 `title`（默认 "Vigil"），副标题 "Hermes"，不设置 group | `TMUX` 环境变量不存在时直接返回 `"Hermes"` |
+| TMUX 变量存在但 tmux 命令失败 | 标题取配置 `title`（默认 "Vigil"），副标题 "tmux"，不设置 group | 兜底分支，保留 tmux 提示 |
 | terminal-notifier 未安装 | 自动降级为 osascript 通知 | 通知正常弹出，**无 group 支持，多 pane 时桌面堆叠**；日志记录降级信息 |
 | 响应正文为空字符串 | hook 不触发，不发送通知 | Hermes 框架 `if final_response and not interrupted:` 保证空响应不触发 `post_llm_call` |
 | 响应正文有代码块标记（```） | 跳过开头的 ` ``` ` 标记行 | 使通知正文更可读，不展示语言标记 |
@@ -300,7 +310,8 @@ cp plugin.yaml    ~/.hermes/plugins/vigil/
 cat > ~/.hermes/plugins/vigil/config.json <<EOF
 {
     "enabled": true,
-    "sound": "Glass",
+    "title": "Vigil",
+    "sound": "default",
     "body_length": 80
 }
 EOF
@@ -342,7 +353,7 @@ User                  Hermes CLI              Vigil Plugin          macOS
   │  收到通知              │                      │                    │
   │◀───────────────────────────────────────────────────────────────  │
   │                       │                      │                    │
-  │  点击通知 → 无行为      │                      │                    │
+  │  点击通知 → -remove group │                     │                    │
   │───────────────────────────────────────────────────────────────▶  │
   │                       │                      │                    │
 ```

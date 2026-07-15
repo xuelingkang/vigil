@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULTS = {
     "enabled": True,
-    "title_prefix": "vigil",
+    "title": "Vigil",
     "sound": "default",
     "body_length": 80,
 }
@@ -73,7 +73,7 @@ def _tn_path() -> str | None:
 
 
 def _get_title_and_group() -> tuple[str, str | None]:
-    """返回 (title, group)。title 显示在通知上，group 用于通知替换/分组。tmux 外返回 group=None。"""
+    """返回 (subtitle, group)。subtitle 显示在通知副标题上，group 用于通知替换/分组。tmux 外返回 group=None。"""
     if os.environ.get("TMUX"):
         try:
             result = subprocess.run(
@@ -121,6 +121,7 @@ def _send_osascript_notification(title: str, message: str, sound: str) -> None:
 
 def _send_notification(
     title: str,
+    subtitle: str,
     message: str,
     sound: str,
     group: str | None,
@@ -131,14 +132,18 @@ def _send_notification(
         cmd = [
             tn,
             "-title",   title,
+            "-subtitle", subtitle,
             "-message", message,
         ]
         if group:
             cmd += ["-group", group]
+            # 点击通知移除当前组（关闭通知并清理通知中心）
+            cmd += ["-execute", f"{tn} -remove {group}"]
+        else:
+            # tmux 外无分组，点击通知即关闭
+            cmd += ["-execute", "true"]
         if sound:
             cmd += ["-sound", sound]
-        # 点击通知关闭（无跳转）
-        cmd += ["-execute", "true"]
 
         try:
             result = subprocess.run(cmd, timeout=5, capture_output=True)
@@ -156,13 +161,14 @@ def _send_notification(
 
 def _notify_async(
     title: str,
+    subtitle: str,
     message: str,
     sound: str,
     group: str | None,
 ) -> None:
     threading.Thread(
         target=_send_notification,
-        args=(title, message, sound, group),
+        args=(title, subtitle, message, sound, group),
         daemon=True,
         name="vigil",
     ).start()
@@ -187,13 +193,9 @@ def _on_post_llm_call(
     if not cfg.get("enabled", True):
         return
 
-    # 构建通知标题（带前缀）
-    title, group = _get_title_and_group()
-    title_prefix = cfg.get("title_prefix")
-    if title_prefix:
-        full_title = f"{title_prefix}:{title}"
-    else:
-        full_title = title
+    # 构建通知标题和副标题
+    subtitle, group = _get_title_and_group()
+    config_title = cfg.get("title", DEFAULTS["title"])
 
     # 截取通知正文
     body_length = cfg.get("body_length", 80)
@@ -207,7 +209,7 @@ def _on_post_llm_call(
 
     sound = cfg.get("sound", "Glass")
 
-    _notify_async(full_title, body, sound, group)
+    _notify_async(config_title, subtitle, body, sound, group)
 
 
 # ---------------------------------------------------------------------------

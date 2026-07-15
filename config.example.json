@@ -1,6 +1,6 @@
 {
     "enabled": true,
-    "title_prefix": "vigil",
+    "title": "Vigil",
     "sound": "default",
     "body_length": 80
 }

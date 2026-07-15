@@ -7,8 +7,9 @@ Vigil 是一款 [Hermes](https://github.com/NousResearch/hermes-agent) 插件，
 ## 功能
 
 - **LLM 回复完成通知**：Hermes 每次生成回复后自动弹出 macOS 通知
-- **tmux 位置标识**：在 tmux 内时，通知标题显示当前 `session:window.pane`（如 `work:1.0`），精确定位 Hermes 所在位置
+- **通知标题可配置**：通知标题通过配置项 `title` 自定义（默认 `"Vigil"`），副标题动态显示 tmux `session:window.pane`（如 `work:1.0`）或 `Hermes`（tmux 外），精确定位 Hermes 所在位置
 - **按 pane 分组**：同一 tmux pane 内的后续通知自动替换前一条，多个 pane 的通知独立显示、互不干扰
+- **点击移除通知**：tmux 内点击通知正文执行 `terminal-notifier -remove <group>`，关闭当前 pane 通知并清理通知中心；tmux 外无此行为
 - **异步非阻塞**：通知发送在后台线程执行，不影响 Hermes 主流程
 - **通知正文截取**：自动截取过长正文，跳过开头的代码块标记行（`` ``` ``），正文最大长度可配置
 - **智能降级**：优先使用 `terminal-notifier`（支持分组），未安装时自动降级为 `osascript`
@@ -63,7 +64,7 @@ vigil: registered
 ```json
 {
     "enabled": true,
-    "title_prefix": "vigil",
+    "title": "Vigil",
     "sound": "default",
     "body_length": 80
 }
@@ -72,7 +73,7 @@ vigil: registered
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `enabled` | boolean | `true` | 是否启用插件。设为 `false` 时跳过注册，不加载 hook |
-| `title_prefix` | string | `"vigil"` | 通知标题前缀。设为空字符串 `""` 或 `null` 时无前缀，title 直接是 `session:window.pane` 或 `Hermes` |
+| `title` | string | `"Vigil"` | 通知标题。标识通知来源插件 |
 | `sound` | string | `"default"` | macOS 通知声音。推荐 `"default"`（系统提示音）。如需其他声音，从 系统设置 → 声音 → 提示音 中查看名称，填入即可。空字符串或 `null` 表示静音 |
 | `body_length` | integer | `80` | 通知正文截取的最大字符数。设为 `0` 时正文为 `"…"` |
 
@@ -80,15 +81,15 @@ vigil: registered
 
 安装配置完成后无需任何额外操作。每次 Hermes 完成 LLM 回复后，系统会自动弹出通知：
 
-- **tmux 内**：通知标题为 `session:window.pane`（如 `work:1.0`），同一 pane 的新通知替换旧通知
-- **tmux 外**：通知标题为 `Hermes`，每条通知独立显示
+- **tmux 内**：通知标题为配置项 `title`（默认 `"Vigil"`），副标题为 `session:window.pane`（如 `work:1.0`），同一 pane 的新通知替换旧通知；点击通知移除该 pane 的所有通知
+- **tmux 外**：通知标题为配置项 `title`（默认 `"Vigil"`），副标题为 `Hermes`，每条通知独立显示、不会自动移除
 
 > **注意**：Hermes 框架在 `final_response` 为空字符串或回复被中断时不会触发 `post_llm_call` hook，因此 Vigil 只能对有实际内容的回复发送通知——这是 Hermes 框架的设计行为，非插件问题。
 
 ## 注意事项
 
 - **macOS only**：依赖 `terminal-notifier` 或 `osascript`，仅支持 macOS
-- **点击关闭通知**：点击通知正文即可关闭，无跳转行为
+- **点击通知移除**：tmux 内点击通知执行 `terminal-notifier -remove <group>`，关闭并清理通知中心；tmux 外点击通知仅关闭弹窗，不清理通知中心
 - **tmux 依赖**：tmux 位置标识功能需要 `tmux` 命令可用且进程在 tmux 环境中运行
 - **分组依赖**：通知按 pane 分组需 `terminal-notifier` 支持；降级为 `osascript` 时所有通知独立显示
 - **日志前缀**：所有插件日志以 `vigil:` 前缀输出，可在 Hermes 日志中查看
