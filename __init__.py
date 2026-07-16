@@ -74,10 +74,11 @@ def _tn_path() -> str | None:
 
 def _get_title_and_group() -> tuple[str, str | None]:
     """返回 (subtitle, group)。subtitle 显示在通知副标题上，group 用于通知替换/分组。tmux 外返回 group=None。"""
-    if os.environ.get("TMUX"):
+    tmux_pane = os.environ.get("TMUX_PANE")
+    if os.environ.get("TMUX") and tmux_pane:
         try:
             result = subprocess.run(
-                ["tmux", "display-message", "-p", "#S:#W.#P"],
+                ["tmux", "display-message", "-t", tmux_pane, "-p", "#S:#W.#P"],
                 capture_output=True, text=True, timeout=2,
             )
             if result.returncode == 0:
