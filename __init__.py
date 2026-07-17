@@ -194,6 +194,12 @@ def _on_post_llm_call(
     if not cfg.get("enabled", True):
         return
 
+    # Skip background review / curator auto-save notifications.
+    # Hermes spawns a forked review agent after each session to auto-save
+    # memory and skills; the review prompt is always the user_message.
+    if user_message.startswith("Review the conversation above"):
+        return
+
     # 构建通知标题和副标题
     subtitle, group = _get_title_and_group()
     config_title = cfg.get("title", DEFAULTS["title"])
