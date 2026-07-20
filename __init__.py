@@ -200,6 +200,12 @@ def _on_post_llm_call(
     if user_message.startswith("Review the conversation above"):
         return
 
+    # Skip commander-validate review subprocess notifications.
+    # commander-validate calls `hermes chat` as a subprocess to review
+    # terminal commands; the review prompt always starts with this prefix.
+    if user_message.startswith("评审这条命令："):
+        return
+
     # 构建通知标题和副标题
     subtitle, group = _get_title_and_group()
     config_title = cfg.get("title", DEFAULTS["title"])
